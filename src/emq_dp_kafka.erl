@@ -72,9 +72,9 @@ ekaf_init(_Env) ->
 get_kafka_topic() ->
     {ok, Values} = application:get_env(emq_dp_kafka, values),
 	ProducerTopic= proplists:get_value(producer_topic, Values),
-	{ok, ProducerTopic}
+	{ok, ProducerTopic}.
 
-on_client_connected(ConnAck, Client = #mqtt_client{client_id = ClientId}, _Env) ->
+on_client_connected(_ConnAck, Client = #mqtt_client{client_id = _ClientId}, _Env) ->
     {ok, Client}.
 
 on_client_disconnected(Reason, _Client = #mqtt_client{client_id = ClientId}, _Env) ->
@@ -109,11 +109,10 @@ on_message_publish(Message = #mqtt_message{topic = <<"$SYS/", _/binary>>}, _Env)
 
 on_message_publish(Message = #mqtt_message{
                         from      = From,
-                        sender    = Sender,
-                        pktid     = PkgId,
-                        qos       = Qos,
-                        retain    = Retain,
-                        dup       = Dup,
+                        pktid     = _PkgId,
+                        qos       = QoS,
+                        retain    = _Retain,
+                        dup       = _Dup,
                         topic     = Topic,
                         payload   = Payload,
 						timestamp = Timestamp}, _Env) ->
