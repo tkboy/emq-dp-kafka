@@ -1,5 +1,5 @@
 {application,emq_dp_kafka,
-             [{description,"EMQ Plugin Template"},
+             [{description,"EMQ DataPoint Kafka Brigde"},
               {vsn,"2.3.10"},
               {id,"v2.3.10-dirty"},
               {modules,[]},
