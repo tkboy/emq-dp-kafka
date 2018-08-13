@@ -1,5 +1,5 @@
 %%--------------------------------------------------------------------
-%% Copyright (c) 2013-2018 EMQ Enterprise, Inc. (http://emqtt.io)
+%% Copyright (c) 2018 Wen Jing<wenjing2016@gmail.com>, All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -19,13 +19,24 @@
 -behaviour(application).
 
 %% Application callbacks
+%% application 行为的回调，这也是整个插件启停的入口
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
+	% start supervise
+	% 启动监督树
     {ok, Sup} = emq_dp_kafka_sup:start_link(),
+	% register auth module
+	% 注册自定义的认证模块
     ok = emqttd_access_control:register_mod(auth, emq_dp_kafka_auth, []),
+	% register acl module
+	% 注册自定义的访问控制模块
     ok = emqttd_access_control:register_mod(acl, emq_dp_kafka_acl, []),
+	% load kafka module
+	% 加载kafka模块
     emq_dp_kafka:load(application:get_all_env()),
+	% return OK
+	% 返回OK
     {ok, Sup}.
 
 stop(_State) ->

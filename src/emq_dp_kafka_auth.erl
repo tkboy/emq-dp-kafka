@@ -1,5 +1,5 @@
 %%--------------------------------------------------------------------
-%% Copyright (c) 2013-2018 EMQ Enterprise, Inc. (http://emqtt.io)
+%% Copyright (c) 2018 Wen Jing<wenjing2016@gmail.com>, All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
+%%--------------------------------------------------------------------
+%% 此模块来自emq_plugin_template，其仅仅做认证，与kafka无关。
+%% 因可能有其他用途，暂时保留
+%%--------------------------------------------------------------------
 -module(emq_dp_kafka_auth).
 
 -behaviour(emqttd_auth_mod).
