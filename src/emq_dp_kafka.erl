@@ -32,6 +32,7 @@
 
 %% Called when the plugin application start
 load(Env) ->
+    ekaf_init([Env]),
     emqttd:hook('client.connected', fun ?MODULE:on_client_connected/3, [Env]),
     emqttd:hook('client.disconnected', fun ?MODULE:on_client_disconnected/3, [Env]),
     emqttd:hook('client.subscribe', fun ?MODULE:on_client_subscribe/4, [Env]),
@@ -44,8 +45,36 @@ load(Env) ->
     emqttd:hook('message.delivered', fun ?MODULE:on_message_delivered/4, [Env]),
     emqttd:hook('message.acked', fun ?MODULE:on_message_acked/4, [Env]).
 
+ekaf_init(_Env) ->
+    %% Get parameters
+    %% 从配置中读取参数配置
+    {ok, Values} = application:get_env(emq_dp_kafka, values),
+    BootstrapBroker = proplists:get_value(bootstrap_broker, Values),
+    PartitionStrategy= proplists:get_value(partition_strategy, Values),
+	ProducerTopic= proplists:get_value(producer_topic, Values),
+    %% Set partition strategy. 设置分区策略
+    %% eg. application:set_env(ekaf, ekaf_partition_strategy, strict_round_robin),
+    application:set_env(ekaf, ekaf_partition_strategy, PartitionStrategy),
+    %% Set broker url and port. 设置Kafka代理地址
+    %% application:set_env(ekaf, ekaf_bootstrap_broker, {"127.0.0.1", 9092}),
+    application:set_env(ekaf, ekaf_bootstrap_broker, BootstrapBroker),
+    %% Set topic. 设置主题地址
+    application:set_env(ekaf, ekaf_bootstrap_topics, ProducerTopic),
+	%% 启动各个子模块，其中kafkamocker会模拟一个kafka代理，
+    %% ranch是kafkamocker所有依赖的，提供tcp支持的模块
+    {ok, _} = application:ensure_all_started(kafkamocker),
+    {ok, _} = application:ensure_all_started(gproc),
+    {ok, _} = application:ensure_all_started(ranch),
+    {ok, _} = application:ensure_all_started(ekaf),
+    io:format("Init ekaf with ~p~n", [BootstrapBroker]).
+
+%% 从配置中获取当前Kafka的主题
+get_kafka_topic() ->
+    {ok, Values} = application:get_env(emq_dp_kafka, values),
+	ProducerTopic= proplists:get_value(producer_topic, Values),
+	{ok, ProducerTopic}
+
 on_client_connected(ConnAck, Client = #mqtt_client{client_id = ClientId}, _Env) ->
-    io:format("client ~s connected, connack: ~w~n", [ClientId, ConnAck]),
     {ok, Client}.
 
 on_client_disconnected(Reason, _Client = #mqtt_client{client_id = ClientId}, _Env) ->
@@ -78,8 +107,28 @@ on_session_terminated(ClientId, Username, Reason, _Env) ->
 on_message_publish(Message = #mqtt_message{topic = <<"$SYS/", _/binary>>}, _Env) ->
     {ok, Message};
 
-on_message_publish(Message, _Env) ->
+on_message_publish(Message = #mqtt_message{
+                        from      = From,
+                        sender    = Sender,
+                        pktid     = PkgId,
+                        qos       = Qos,
+                        retain    = Retain,
+                        dup       = Dup,
+                        topic     = Topic,
+                        payload   = Payload,
+						timestamp = Timestamp}, _Env) ->
     io:format("publish ~s~n", [emqttd_message:format(Message)]),
+    Json = mochijson2:encode([
+        {type, <<"published">>},
+        {client_id, From},
+        {topic, Topic},
+        {payload, Payload},
+        {qos, QoS},
+        {cluster_node, node()},
+        {ts, emqttd_time:now_to_secs(Timestamp)}
+    ]),
+    {ok, ProduceTopic} = get_kafka_topic(),
+    ekaf:produce_async(ProduceTopic, list_to_binary(Json)),
     {ok, Message}.
 
 on_message_delivered(ClientId, Username, Message, _Env) ->
