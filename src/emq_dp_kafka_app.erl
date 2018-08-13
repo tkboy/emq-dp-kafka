@@ -14,18 +14,21 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
--module(emq_plugin_template_sup).
+-module(emq_dp_kafka_app).
 
--behaviour(supervisor).
+-behaviour(application).
 
-%% API
--export([start_link/0]).
+%% Application callbacks
+-export([start/2, stop/1]).
 
-%% Supervisor callbacks
--export([init/1]).
+start(_StartType, _StartArgs) ->
+    {ok, Sup} = emq_dp_kafka_sup:start_link(),
+    ok = emqttd_access_control:register_mod(auth, emq_dp_kafka_auth, []),
+    ok = emqttd_access_control:register_mod(acl, emq_dp_kafka_acl, []),
+    emq_dp_kafka:load(application:get_all_env()),
+    {ok, Sup}.
 
-start_link() ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
-
-init([]) ->
-    {ok, { {one_for_one, 0, 1}, []} }.
+stop(_State) ->
+    ok = emqttd_access_control:unregister_mod(auth, emq_dp_kafka_auth),
+    ok = emqttd_access_control:unregister_mod(acl, emq_dp_kafka_acl),
+    emq_dp_kafka:unload().

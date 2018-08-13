@@ -1,8 +1,8 @@
-{application,emq_plugin_template,
+{application,emq_dp_kafka,
              [{description,"EMQ Plugin Template"},
               {vsn,"2.3.10"},
               {id,"v2.3.10-dirty"},
               {modules,[]},
-              {registered,[emq_plugin_template_sup]},
+              {registered,[emq_dp_kafka_sup]},
               {applications,[kernel,stdlib]},
-              {mod,{emq_plugin_template_app,[]}}]}.
+              {mod,{emq_dp_kafka_app,[]}}]}.
