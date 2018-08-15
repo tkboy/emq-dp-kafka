@@ -46,21 +46,32 @@ load(Env) ->
     emqttd:hook('message.acked', fun ?MODULE:on_message_acked/4, [Env]).
 
 ekaf_init(_Env) ->
-    %% Get parameters
-    %% 从配置中读取参数配置
+    %% Get parameters 从配置中读取参数配置
     {ok, Values} = application:get_env(emq_kafka, values),
+    %% broker 代理服务器的地址
     BootstrapBroker = proplists:get_value(bootstrap_broker, Values),
-    PartitionStrategy= proplists:get_value(partition_strategy, Values),
-	ProducerTopic= proplists:get_value(producer_topic, Values),
-    %% Set partition strategy. 设置分区策略
-    %% eg. application:set_env(ekaf, ekaf_partition_strategy, strict_round_robin),
-    application:set_env(ekaf, ekaf_partition_strategy, PartitionStrategy),
+    %% data points 数据流主题及策略
+    {ok, DpTopic, DpPartitionStrategy} = get_data_points_topic(Values),
+    %% device status 设备状态流主题及策略
+    {ok, DsTopic, DsPartitionStrategy} = get_device_status_topic(Values),
+
     %% Set broker url and port. 设置Kafka代理地址
     %% application:set_env(ekaf, ekaf_bootstrap_broker, {"127.0.0.1", 9092}),
     application:set_env(ekaf, ekaf_bootstrap_broker, BootstrapBroker),
+
     %% Set topic. 设置主题地址
-    application:set_env(ekaf, ekaf_bootstrap_topics, ProducerTopic),
-	%% 启动各个子模块，其中kafkamocker会模拟一个kafka代理，
+    %% application:set_env(ekaf, ekaf_bootstrap_topics, DpTopic),
+
+    %% Set partition strategy. 设置分区策略
+    %% eg. application:set_env(ekaf, ekaf_partition_strategy, strict_round_robin),
+    application:set_env(ekaf, ekaf_partition_strategy,
+                        [
+                         {DpTopic, DpPartitionStrategy},
+                         {DsTopic, DsPartitionStrategy},
+                         {ekaf_partition_strategy, strict_round_robin}
+                         ]),
+
+    %% 启动各个子模块，其中kafkamocker会模拟一个kafka代理，
     %% ranch是kafkamocker所有依赖的，提供tcp支持的模块
     {ok, _} = application:ensure_all_started(kafkamocker),
     {ok, _} = application:ensure_all_started(gproc),
@@ -68,17 +79,58 @@ ekaf_init(_Env) ->
     {ok, _} = application:ensure_all_started(ekaf),
     io:format("Init ekaf with ~p~n", [BootstrapBroker]).
 
-%% 从配置中获取当前Kafka的主题
-get_kafka_topic() ->
+%% 从配置中获取当前Kafka的设备数据流主题
+get_data_points_topic() ->
     {ok, Values} = application:get_env(emq_kafka, values),
-	ProducerTopic= proplists:get_value(producer_topic, Values),
-	{ok, ProducerTopic}.
+    get_data_points_topic(Values).
 
-on_client_connected(_ConnAck, Client = #mqtt_client{client_id = _ClientId}, _Env) ->
+%% 获取设备数据流主题
+get_data_points_topic(Values) ->
+    Topic= proplists:get_value(data_points_topic, Values),
+    PartitionStrategy= proplists:get_value(data_points_partition_strategy, Values),
+    {ok, Topic, PartitionStrategy}.
+
+%% 从配置中获取当前Kafka的设备状态流主题
+get_device_status_topic() ->
+    {ok, Values} = application:get_env(emq_kafka, values),
+    get_device_status_topic(Values).
+
+%% 获取设备状态流主题
+get_device_status_topic(Values) ->
+    Topic= proplists:get_value(device_status_topic, Values),
+    PartitionStrategy= proplists:get_value(device_status_partition_strategy, Values),
+    {ok, Topic, PartitionStrategy}.
+
+on_client_connected(_ConnAck, Client = #mqtt_client{
+                        client_id    = ClientId,
+                        username     = Username,
+                        connected_at = ConnectedAt}, _Env) ->
+    Json = mochijson2:encode([
+        {type, <<"connected">>},
+        {client_id, ClientId},
+        {username, Username},
+        {cluster_node, node()},
+        {ts, emqttd_time:now_to_secs(ConnectedAt)}
+    ]),
+    {ok, ProduceTopic, _} = get_device_status_topic(),
+    ekaf:produce_async(ProduceTopic, {ClientId, list_to_binary(Json)}),
     {ok, Client}.
 
-on_client_disconnected(Reason, _Client = #mqtt_client{client_id = ClientId}, _Env) ->
+on_client_disconnected(Reason, _Client = #mqtt_client{
+                        client_id    = ClientId,
+                        username     = Username,
+                        connected_at = ConnectedAt}, _Env) ->
     io:format("client ~s disconnected, reason: ~w~n", [ClientId, Reason]),
+        Json = mochijson2:encode([
+        {type, <<"disconnected">>},
+        {client_id, ClientId},
+        {username, Username},
+        {cluster_node, node()},
+        {reason, Reason},
+        {ts, emqttd_time:now_to_secs(ConnectedAt)}
+    ]),
+    {ok, ProduceTopic, _} = get_device_status_topic(),
+    ekaf:produce_async(ProduceTopic, {ClientId, list_to_binary(Json)}),
     ok.
 
 on_client_subscribe(ClientId, Username, TopicTable, _Env) ->
@@ -115,7 +167,7 @@ on_message_publish(Message = #mqtt_message{
                         dup       = _Dup,
                         topic     = Topic,
                         payload   = Payload,
-						timestamp = Timestamp}, _Env) ->
+                        timestamp = Timestamp}, _Env) ->
     io:format("publish ~s~n", [emqttd_message:format(Message)]),
     Json = mochijson2:encode([
         {type, <<"published">>},
@@ -126,8 +178,8 @@ on_message_publish(Message = #mqtt_message{
         {cluster_node, node()},
         {ts, emqttd_time:now_to_secs(Timestamp)}
     ]),
-    {ok, ProduceTopic} = get_kafka_topic(),
-    ekaf:produce_async(ProduceTopic, list_to_binary(Json)),
+    {ok, ProduceTopic, _} = get_data_points_topic(),
+    ekaf:produce_async(ProduceTopic, {From, list_to_binary(Json)}),
     {ok, Message}.
 
 on_message_delivered(ClientId, Username, Message, _Env) ->
