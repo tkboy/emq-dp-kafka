@@ -14,7 +14,7 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
--module(emq_dp_kafka).
+-module(emq_kafka).
 
 -include_lib("emqttd/include/emqttd.hrl").
 
@@ -48,7 +48,7 @@ load(Env) ->
 ekaf_init(_Env) ->
     %% Get parameters
     %% 从配置中读取参数配置
-    {ok, Values} = application:get_env(emq_dp_kafka, values),
+    {ok, Values} = application:get_env(emq_kafka, values),
     BootstrapBroker = proplists:get_value(bootstrap_broker, Values),
     PartitionStrategy= proplists:get_value(partition_strategy, Values),
 	ProducerTopic= proplists:get_value(producer_topic, Values),
@@ -70,7 +70,7 @@ ekaf_init(_Env) ->
 
 %% 从配置中获取当前Kafka的主题
 get_kafka_topic() ->
-    {ok, Values} = application:get_env(emq_dp_kafka, values),
+    {ok, Values} = application:get_env(emq_kafka, values),
 	ProducerTopic= proplists:get_value(producer_topic, Values),
 	{ok, ProducerTopic}.
 

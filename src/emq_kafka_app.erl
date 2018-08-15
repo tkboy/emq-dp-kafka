@@ -14,7 +14,7 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
--module(emq_dp_kafka_app).
+-module(emq_kafka_app).
 
 -behaviour(application).
 
@@ -25,21 +25,21 @@
 start(_StartType, _StartArgs) ->
 	% start supervise
 	% 启动监督树
-    {ok, Sup} = emq_dp_kafka_sup:start_link(),
+    {ok, Sup} = emq_kafka_sup:start_link(),
 	% register auth module
 	% 注册自定义的认证模块
-    ok = emqttd_access_control:register_mod(auth, emq_dp_kafka_auth, []),
+    ok = emqttd_access_control:register_mod(auth, emq_kafka_auth, []),
 	% register acl module
 	% 注册自定义的访问控制模块
-    ok = emqttd_access_control:register_mod(acl, emq_dp_kafka_acl, []),
+    ok = emqttd_access_control:register_mod(acl, emq_kafka_acl, []),
 	% load kafka module
 	% 加载kafka模块
-    emq_dp_kafka:load(application:get_all_env()),
+    emq_kafka:load(application:get_all_env()),
 	% return OK
 	% 返回OK
     {ok, Sup}.
 
 stop(_State) ->
-    ok = emqttd_access_control:unregister_mod(auth, emq_dp_kafka_auth),
-    ok = emqttd_access_control:unregister_mod(acl, emq_dp_kafka_acl),
-    emq_dp_kafka:unload().
+    ok = emqttd_access_control:unregister_mod(auth, emq_kafka_auth),
+    ok = emqttd_access_control:unregister_mod(acl, emq_kafka_acl),
+    emq_kafka:unload().

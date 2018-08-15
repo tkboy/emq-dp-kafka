@@ -1,5 +1,5 @@
 
--module(emq_dp_kafka_SUITE).
+-module(emq_kafka_SUITE).
 
 -compile(export_all).
 

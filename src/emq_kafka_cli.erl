@@ -14,25 +14,14 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
-%%--------------------------------------------------------------------
-%% 此模块来自emq_plugin_template，其仅仅做访问控制，与kafka无关。
-%% 因可能有其他用途，暂时保留
-%%--------------------------------------------------------------------
--module(emq_dp_kafka_acl).
+-module(emq_kafka_cli).
 
--include_lib("emqttd/include/emqttd.hrl").
+-include_lib("emqttd/include/emqttd_cli.hrl").
 
-%% ACL callbacks
--export([init/1, check_acl/2, reload_acl/1, description/0]).
+-export([cmd/1]).
 
-init(Opts) ->
-    {ok, Opts}.
+cmd(["arg1", "arg2"]) ->
+    ?PRINT_MSG("ok");
 
-check_acl({Client, PubSub, Topic}, _Opts) ->
-    io:format("ACL Demo: ~p ~p ~p~n", [Client, PubSub, Topic]),
-    allow.
-
-reload_acl(_Opts) ->
-    ok.
-
-description() -> "ACL Demo Module".
+cmd(_) ->
+    ?USAGE([{"cmd arg1 arg2",  "cmd demo"}]).

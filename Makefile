@@ -1,5 +1,5 @@
-PROJECT = emq_dp_kafka
-PROJECT_DESCRIPTION = EMQ DataPoint Kafka Bridge
+PROJECT = emq_kafka
+PROJECT_DESCRIPTION = EMQ Kafka Bridge for DataPoint and Status
 PROJECT_VERSION = 2.3.10
 
 # 依赖项
@@ -22,4 +22,4 @@ include erlang.mk
 app:: rebar.config
 
 app.config::
-	./deps/cuttlefish/cuttlefish -l info -e etc/ -c etc/emq_dp_kafka.conf -i priv/emq_dp_kafka.schema -d data
+	./deps/cuttlefish/cuttlefish -l info -e etc/ -c etc/emq_kafka.conf -i priv/emq_kafka.schema -d data

@@ -11,4 +11,4 @@ rel/example_project
 .erlang.mk/
 emqttd_plugin_template.d
 .project
-emq_dp_kafka.d
+emq_kafka.d

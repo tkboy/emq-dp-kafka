@@ -14,23 +14,18 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
-%%--------------------------------------------------------------------
-%% 此模块来自emq_plugin_template，其仅仅做认证，与kafka无关。
-%% 因可能有其他用途，暂时保留
-%%--------------------------------------------------------------------
--module(emq_dp_kafka_auth).
+-module(emq_kafka_sup).
 
--behaviour(emqttd_auth_mod).
+-behaviour(supervisor).
 
--include_lib("emqttd/include/emqttd.hrl").
+%% API
+-export([start_link/0]).
 
--export([init/1, check/3, description/0]).
+%% Supervisor callbacks
+-export([init/1]).
 
-init(Opts) -> {ok, Opts}.
+start_link() ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-check(#mqtt_client{client_id = ClientId, username = Username}, Password, _Opts) ->
-    io:format("Auth Demo: clientId=~p, username=~p, password=~p~n",
-              [ClientId, Username, Password]),
-    ok.
-
-description() -> "Auth Demo Module".
+init([]) ->
+    {ok, { {one_for_one, 5, 10}, []} }.
