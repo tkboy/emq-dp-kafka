@@ -47,7 +47,7 @@ load(Env) ->
 
 ekaf_init(_Env) ->
     %% Get parameters 从配置中读取参数配置
-    {ok, Values} = application:get_env(emq_kafka, values),
+    {ok, Values} = application:get_env(?APP, values),
     %% broker 代理服务器的地址
     BootstrapBroker = proplists:get_value(bootstrap_broker, Values),
     %% data points 数据流主题及策略
@@ -81,7 +81,7 @@ ekaf_init(_Env) ->
 
 %% 从配置中获取当前Kafka的设备数据流主题
 get_data_points_topic() ->
-    {ok, Values} = application:get_env(emq_kafka, values),
+    {ok, Values} = application:get_env(?APP, values),
     get_data_points_topic(Values).
 
 %% 获取设备数据流主题
@@ -92,7 +92,7 @@ get_data_points_topic(Values) ->
 
 %% 从配置中获取当前Kafka的设备状态流主题
 get_device_status_topic() ->
-    {ok, Values} = application:get_env(emq_kafka, values),
+    {ok, Values} = application:get_env(?APP, values),
     get_device_status_topic(Values).
 
 %% 获取设备状态流主题
