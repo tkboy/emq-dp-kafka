@@ -16,6 +16,8 @@
 
 -module(emq_kafka).
 
+-include("emq_kafka.hrl").
+
 -include_lib("emqttd/include/emqttd.hrl").
 
 -export([load/1, unload/0]).
