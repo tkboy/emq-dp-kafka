@@ -112,7 +112,7 @@ on_client_connected(_ConnAck, Client = #mqtt_client{
         {client_id, ClientId},
         {username, Username},
         {cluster_node, node()},
-        {ts, emqttd_time:now_to_secs(ConnectedAt)}
+        {ts, emqttd_time:now_ms(ConnectedAt)}
     ]),
     {ok, ProduceTopic, _} = get_device_status_topic(),
     ekaf:produce_async(ProduceTopic, {ClientId, list_to_binary(Json)}),
@@ -129,7 +129,7 @@ on_client_disconnected(Reason, _Client = #mqtt_client{
         {username, Username},
         {cluster_node, node()},
         {reason, Reason},
-        {ts, emqttd_time:now_to_secs(ConnectedAt)}
+        {ts, emqttd_time:now_ms(ConnectedAt)}
     ]),
     {ok, ProduceTopic, _} = get_device_status_topic(),
     ekaf:produce_async(ProduceTopic, {ClientId, list_to_binary(Json)}),
@@ -178,7 +178,7 @@ on_message_publish(Message = #mqtt_message{
         {payload, Payload},
         {qos, QoS},
         {cluster_node, node()},
-        {ts, emqttd_time:now_to_secs(Timestamp)}
+        {ts, emqttd_time:now_ms(Timestamp)}
     ]),
     {ok, ProduceTopic, _} = get_data_points_topic(),
     ekaf:produce_async(ProduceTopic, {From, list_to_binary(Json)}),

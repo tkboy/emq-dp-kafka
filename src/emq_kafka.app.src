@@ -1,8 +1,0 @@
-{application,emq_kafka,
-             [{description,"EMQ DataPoint Kafka Brigde"},
-              {vsn,"2.3.10"},
-              {id,"v2.3.10-dirty"},
-              {modules,[]},
-              {registered,[emq_kafka_sup]},
-              {applications,[kernel,stdlib]},
-              {mod,{emq_kafka_app,[]}}]}.
