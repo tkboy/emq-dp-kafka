@@ -184,7 +184,7 @@ on_message_publish(Message = #mqtt_message{
         {ts, emqttd_time:now_ms(Timestamp)}
     ]),
     {ok, ProduceTopic, _} = get_data_points_topic(),
-    ekaf:produce_async(ProduceTopic, {From, list_to_binary(Json)}),
+    ekaf:produce_async(ProduceTopic, {ClientId, list_to_binary(Json)}),
     {ok, Message}.
 
 on_message_delivered(ClientId, Username, Message, _Env) ->
