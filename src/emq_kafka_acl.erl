@@ -29,7 +29,7 @@ init(Opts) ->
     {ok, Opts}.
 
 check_acl({Client, PubSub, Topic}, _Opts) ->
-    io:format("ACL Demo: ~p ~p ~p~n", [Client, PubSub, Topic]),
+    io:format("~p: ~p ~p ~p~n", [?MODULE, Client, PubSub, Topic]),
     allow.
 
 reload_acl(_Opts) ->

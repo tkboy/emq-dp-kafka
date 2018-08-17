@@ -75,11 +75,11 @@ ekaf_init(_Env) ->
 
     %% 启动各个子模块，其中kafkamocker会模拟一个kafka代理，
     %% ranch是kafkamocker所有依赖的，提供tcp支持的模块
-    {ok, _} = application:ensure_all_started(kafkamocker),
+    %% {ok, _} = application:ensure_all_started(kafkamocker),
     {ok, _} = application:ensure_all_started(gproc),
-    {ok, _} = application:ensure_all_started(ranch),
+    %% {ok, _} = application:ensure_all_started(ranch),
     {ok, _} = application:ensure_all_started(ekaf),
-    io:format("Init ekaf with ~p~n", [BootstrapBroker]).
+    io:format("~p: Init ekaf with ~p~n", [?MODULE, BootstrapBroker]).
 
 %% 从配置中获取当前Kafka的设备数据流主题
 get_data_points_topic() ->
@@ -122,7 +122,7 @@ on_client_disconnected(Reason, _Client = #mqtt_client{
                         client_id    = ClientId,
                         username     = Username,
                         connected_at = ConnectedAt}, _Env) ->
-    io:format("client ~s disconnected, reason: ~w~n", [ClientId, Reason]),
+    io:format("~p: client ~s disconnected, reason: ~w~n", [?MODULE, ClientId, Reason]),
         Json = mochijson2:encode([
         {type, <<"disconnected">>},
         {client_id, ClientId},
@@ -136,47 +136,50 @@ on_client_disconnected(Reason, _Client = #mqtt_client{
     ok.
 
 on_client_subscribe(ClientId, Username, TopicTable, _Env) ->
-    io:format("client(~s/~s) will subscribe: ~p~n", [Username, ClientId, TopicTable]),
+    io:format("~p: client(~s/~s) will subscribe: ~p~n", [?MODULE, Username, ClientId, TopicTable]),
     {ok, TopicTable}.
 
 on_client_unsubscribe(ClientId, Username, TopicTable, _Env) ->
-    io:format("client(~s/~s) unsubscribe ~p~n", [ClientId, Username, TopicTable]),
+    io:format("~p: client(~s/~s) unsubscribe ~p~n", [?MODULE, ClientId, Username, TopicTable]),
     {ok, TopicTable}.
 
 on_session_created(ClientId, Username, _Env) ->
-    io:format("session(~s/~s) created.", [ClientId, Username]).
+    io:format("~p: session(~s/~s) created.", [?MODULE, ClientId, Username]).
 
 on_session_subscribed(ClientId, Username, {Topic, Opts}, _Env) ->
-    io:format("session(~s/~s) subscribed: ~p~n", [Username, ClientId, {Topic, Opts}]),
+    io:format("~p: session(~s/~s) subscribed: ~p~n", [?MODULE, Username, ClientId, {Topic, Opts}]),
     {ok, {Topic, Opts}}.
 
 on_session_unsubscribed(ClientId, Username, {Topic, Opts}, _Env) ->
-    io:format("session(~s/~s) unsubscribed: ~p~n", [Username, ClientId, {Topic, Opts}]),
+    io:format("~p: session(~s/~s) unsubscribed: ~p~n", [?MODULE, Username, ClientId, {Topic, Opts}]),
     ok.
 
 on_session_terminated(ClientId, Username, Reason, _Env) ->
-    io:format("session(~s/~s) terminated: ~p.", [ClientId, Username, Reason]).
+    io:format("~p: session(~s/~s) terminated: ~p.", [?MODULE, ClientId, Username, Reason]).
 
 %% transform message and return
 on_message_publish(Message = #mqtt_message{topic = <<"$SYS/", _/binary>>}, _Env) ->
     {ok, Message};
 
 on_message_publish(Message = #mqtt_message{
-                        from      = From,
+                        from      = {ClientId, Username},
                         pktid     = _PkgId,
                         qos       = QoS,
-                        retain    = _Retain,
-                        dup       = _Dup,
+                        retain    = Retain,
+                        dup       = Dup,
                         topic     = Topic,
                         payload   = Payload,
                         timestamp = Timestamp}, _Env) ->
-    io:format("publish ~s~n", [emqttd_message:format(Message)]),
+    io:format("~p: publish ~s~n", [?MODULE, emqttd_message:format(Message)]),
     Json = mochijson2:encode([
         {type, <<"published">>},
-        {client_id, From},
+        {client_id, ClientId},
+        {username, Username},
         {topic, Topic},
         {payload, Payload},
         {qos, QoS},
+        {dup, Dup},
+        {retain, Retain},
         {cluster_node, node()},
         {ts, emqttd_time:now_ms(Timestamp)}
     ]),
@@ -185,11 +188,11 @@ on_message_publish(Message = #mqtt_message{
     {ok, Message}.
 
 on_message_delivered(ClientId, Username, Message, _Env) ->
-    io:format("delivered to client(~s/~s): ~s~n", [Username, ClientId, emqttd_message:format(Message)]),
+    io:format("~p: delivered to client(~s/~s): ~s~n", [?MODULE, Username, ClientId, emqttd_message:format(Message)]),
     {ok, Message}.
 
 on_message_acked(ClientId, Username, Message, _Env) ->
-    io:format("client(~s/~s) acked: ~s~n", [Username, ClientId, emqttd_message:format(Message)]),
+    io:format("~p: client(~s/~s) acked: ~s~n", [?MODULE, Username, ClientId, emqttd_message:format(Message)]),
     {ok, Message}.
 
 %% Called when the plugin application stop
