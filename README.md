@@ -13,8 +13,8 @@ Plugin Config
 
 Found Issue
 -----------
-When per pertition workers size set too much or set to default(100),
-an connection error would occur soon in a while with unknown reason, and block later reconnect.
+When per partition workers size set too much or set to default(100),
+an connection error may occur soon in a while with unknown reason, and block later reconnect.
 maybe it is a ekaf bug, and ekaf seem cannot recover from such situation.
 
 this issue need further investigation.
