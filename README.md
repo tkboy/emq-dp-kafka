@@ -1,28 +1,23 @@
 
-emq-plugin-template
-===================
+emq-kafka
+=========
 
-This is a template plugin for the EMQ broker.
+This is a simple emq kafka plugin. 2 topic can be configured:
+* points - for client publish message.
+* status - for client connection status.
+
+Each topic can configure partition strategy and worker size seperately.
 
 Plugin Config
 -------------
 
-Each plugin should have a 'etc/{plugin_name}.conf|config' file to store application config.
+Found Issue
+-----------
+When per pertition workers size set too much or set to default(100),
+an connection error would occur soon in a while with unknown reason, and block later reconnect.
+maybe it is a ekaf bug, and ekaf seem cannot recover from such situation.
 
-Authentication and ACL
-----------------------
-
-```
-emqttd_access_control:register_mod(auth, ?MODULE, Env).
-emqttd_access_control:register_mod(acl, ?MODULE, Env).
-```
-
-Plugin and Hooks
------------------
-
-[Plugin Design](http://docs.emqtt.com/en/latest/design.html#plugin-design)
-
-[Hooks Design](http://docs.emqtt.com/en/latest/design.html#hooks-design)
+this issue need further investigation.
 
 License
 -------
