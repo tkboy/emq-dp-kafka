@@ -117,7 +117,6 @@ ekaf_init(_Env) ->
     % or statsd would be a bottleneck when there are too many workers.
     % 使每一个 worker 都关联一个到 statsd 服务的 udp socket，否则，当worker数量多时，statsd会有瓶颈。
     % application:set_env(ekaf, ?EKAF_PUSH_TO_STATSD_ENABLED,  true),
-
     % set intrument callbacks. 监听各类状态
     application:set_env(ekaf, ?EKAF_CALLBACK_FLUSH_ATOM,  {?APP, emq_kafka_callback}),
     application:set_env(ekaf, ?EKAF_CALLBACK_FLUSHED_REPLIED_ATOM, {?APP, emq_kafka_callback}),
@@ -231,7 +230,6 @@ on_message_acked(ClientId, Username, Message, _Env) ->
     io:format("~p: client(~s/~s) acked: ~s~n", [?MODULE, Username, ClientId, emqttd_message:format(Message)]),
     {ok, Message}.
 
-
 produce_points(ClientId, Json) ->
     Topic = get_points_topic(),
     produce(Topic, ClientId, Json),
@@ -257,6 +255,14 @@ get_bootstrap_broker() ->
     {ok, Values} = application:get_env(?APP, bootstrap_broker),
     BootstrapBroker = proplists:get_value(bootstrap_broker, Values),
     {ok, BootstrapBroker}.
+
+get_config_prop_list() ->
+    application:get_env(?APP, config).
+
+get_instrument_config() ->
+    {ok, Values} = get_config_prop_list(),
+    Instrument = proplists:get_value(instrument, Values),
+    {ok, Instrument}.
 
 %% 从配置中获取设备数据流主题Points的配置
 get_points_topic() ->
@@ -288,7 +294,13 @@ unload() ->
     emqttd:unhook('message.delivered', fun ?MODULE:on_message_delivered/4),
     emqttd:unhook('message.acked', fun ?MODULE:on_message_acked/4).
 
-emq_kafka_callback(Event, _From, _StateName, #ekaf_fsm { 
+emq_kafka_callback(Event, From, StateName, State, Extra) ->
+    case get_instrument_config() of
+        {ok, true} -> emq_kafka_callback_real(Event, From, StateName, State, Extra);
+        _ -> ok
+    end.
+
+emq_kafka_callback_real(Event, _From, _StateName, #ekaf_fsm {
                           topic = Topic,
                           broker = _Broker,
                           partition = PartitionId,
@@ -337,7 +349,7 @@ emq_kafka_callback(Event, _From, _StateName, #ekaf_fsm {
             ?INFO_MSG("ekaf_fsm callback got ~p ~p",[Event, Extra])
     end;
 
-emq_kafka_callback(Event, _From, StateName,
+emq_kafka_callback_real(Event, _From, StateName,
                 #ekaf_server{ topic = Topic },
                 Extra)->
     Stat = <<Topic/binary,".",  Event/binary>>,

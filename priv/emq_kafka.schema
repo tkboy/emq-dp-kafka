@@ -18,6 +18,16 @@
   [{bootstrap_broker, {Host, Port}}]
   end}.
 
+{mapping, "kafka.config.instrument", "emq_kafka.config", [
+  {default, false},
+  {datatype, {enum, [true, false]}}
+]}.
+
+{translation, "emq_kafka.config", fun(Conf) ->
+  Instrument = cuttlefish:conf_get("kafka.config.instrument", Conf),
+  [{instrument, Instrument}]
+  end}.
+
 {mapping, "kafka.points.topic", "emq_kafka.points", [
   {default, "device-data-points"},
   {datatype, string}
