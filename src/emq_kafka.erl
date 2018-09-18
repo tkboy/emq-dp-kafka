@@ -55,9 +55,9 @@ ekaf_init(_Env) ->
     % broker 代理服务器的地址
     {ok, BootstrapBroker} = get_bootstrap_broker(),
     % data points 数据流主题及策略
-    {ok, DpTopic, DpPartitionStrategy, _} = get_points_topic(),
+    {ok, DpTopic, DpPartitionStrategy, DpPartitionWorkers} = get_points_topic(),
     % device status 设备状态流主题及策略
-    {ok, DsTopic, DsPartitionStrategy, _} = get_status_topic(),
+    {ok, DsTopic, DsPartitionStrategy, DsPartitionWorkers} = get_status_topic(),
 
     % Set broker url and port. 设置Kafka代理地址
     %
@@ -86,18 +86,30 @@ ekaf_init(_Env) ->
     % application:set_env(ekaf, ekaf_callback_custom_partition_picker, {ekaf_callbacks, default_custom_partition_picker}),
 
     % batch setting 批量消息设置
-    % reach 10, then send batch. 达到10条消息则推送
+    % reach 20, then send batch. 达到20条消息则推送
     % 1 second(s) of inactivity, then send batch. 1秒后批量推送
-    % application:set_env(ekaf, ekaf_max_buffer_size, 10), % 默认值(default) 100
-    % application:set_env(ekaf, ekaf_buffer_ttl, 1000), % 默认值(default) 5000
+    application:set_env(ekaf, ekaf_max_buffer_size, 20), % 默认值(default) 100
+    application:set_env(ekaf, ekaf_buffer_ttl, 1000), % 默认值(default) 5000
 
     % the count of partition workers. 分区的worker个数
-    % application:set_env(ekaf, ekaf_per_partition_workers, 5),
-    % application:set_env(ekaf, ekaf_per_partition_workers_max, 10),
+    % application:set_env(ekaf, ekaf_per_partition_workers, 5), % 默认值(default) 100
+    % application:set_env(ekaf, ekaf_per_partition_workers_max, 10), % 默认值(default) 100
+    application:set_env(ekaf, ekaf_per_partition_workers,
+                         [
+                           {DpTopic, DpPartitionWorkers},
+                           {DsTopic, DsPartitionWorkers},
+                           {ekaf_per_partition_workers, 2}    % for remaining topics
+                        ]),
+    application:set_env(ekaf, ekaf_per_partition_workers_max,
+                         [
+                           {DpTopic, DpPartitionWorkers},
+                           {DsTopic, DsPartitionWorkers},
+                           {ekaf_per_partition_workers_max, 2}    % for remaining topics
+                        ]),
 
     % downtime buffer size. 
     % 当kafka代理不可用时，缓存待发送消息的buffer的大小。默认不会设置，即0
-    application:set_env(ekaf, ekaf_max_downtime_buffer_size, 1000),
+    application:set_env(ekaf, ekaf_max_downtime_buffer_size, 100),
 
     % intrument settings
 
@@ -235,7 +247,7 @@ produce(TopicInfo, ClientId, Json) ->
         {ok, Topic, custom, _}->
             ekaf:produce_async_batched(Topic, {ClientId, list_to_binary(Json)}),
             ok;
-        {ok, Topic, _} ->
+        {ok, Topic, _, _} ->
             ekaf:produce_async_batched(Topic, list_to_binary(Json)),
             ok
     end.
@@ -314,7 +326,7 @@ emq_kafka_callback(Event, _From, _StateName, #ekaf_fsm {
             io:format("~n ~s 1",[Stat]),
             ok;
         ?EKAF_CALLBACK_TIME_TO_CONNECT ->
-            % 花了多长时间连接服务器
+            % 每个worker花了多长时间连接服务器，如果与8个分区，每个分区有100个worker，则会在初次连接时有800这样的回调
             case Extra of
                 {ok, Micros}->
                     io:format("~n ~s => ~p",[Stat, ekaf_utils:ceiling(Micros/1000)]);
