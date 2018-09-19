@@ -15,9 +15,9 @@ Found Issue
 -----------
 When per partition workers size set too much or set to default(100),
 an connection error may occur soon in a while with unknown reason, and block later reconnect.
-maybe it is a ekaf bug, and ekaf seem cannot recover from such situation.
 
-this issue need further investigation.
+Update:
+after some investigation, it seems have something ralated to kafka settings, eg. replica count.
 
 License
 -------
