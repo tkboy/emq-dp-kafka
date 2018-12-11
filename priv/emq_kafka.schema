@@ -2,20 +2,20 @@
 %% emq_kafka config mapping
 
 
-{mapping, "kafka.host", "emq_kafka.bootstrap_broker", [
-  {default, "127.0.0.1"},
+{mapping, "kafka.brokers", "emq_kafka.bootstrap_brokers", [
+  {default, "127.0.0.1:9092"},
   {datatype, string}
 ]}.
 
-{mapping, "kafka.port", "emq_kafka.bootstrap_broker", [
-  {default, 9092},
-  {datatype, integer}
-]}.
-
-{translation, "emq_kafka.bootstrap_broker", fun(Conf) ->
-  Host = cuttlefish:conf_get("kafka.host", Conf),
-  Port = cuttlefish:conf_get("kafka.port", Conf),
-  [{bootstrap_broker, {Host, Port}}]
+{translation, "emq_kafka.bootstrap_brokers", fun(Conf) ->
+  Brokers = cuttlefish:conf_get("kafka.brokers", Conf),
+  BrokerList = string:tokens(Brokers, ","),
+  BrokerParser = fun(Broker) ->
+    [Host|[PortStr|Rest]] = string:tokens(Broker, ":"),
+    Port = list_to_integer(PortStr),
+    {Host, Port}
+  end,
+  lists:map(BrokerParser, BrokerList)
   end}.
 
 {mapping, "kafka.config.instrument", "emq_kafka.config", [

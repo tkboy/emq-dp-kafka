@@ -20,7 +20,7 @@
 
 -include_lib("emqttd/include/emqttd.hrl").
 
--include_lib("ekaf/include/ekaf_definitions.hrl").
+-include_lib("brod/include/brod_int.hrl").
 
 -export([load/1, unload/0]).
 
@@ -34,11 +34,9 @@
 
 -export([on_message_publish/2, on_message_delivered/4, on_message_acked/4]).
 
--export([emq_kafka_callback/5]).
-
 %% Called when the plugin application start
 load(Env) ->
-    ekaf_init([Env]),
+    brod_init([Env]),
     emqttd:hook('client.connected', fun ?MODULE:on_client_connected/3, [Env]),
     emqttd:hook('client.disconnected', fun ?MODULE:on_client_disconnected/3, [Env]),
     emqttd:hook('client.subscribe', fun ?MODULE:on_client_subscribe/4, [Env]),
@@ -51,94 +49,37 @@ load(Env) ->
     emqttd:hook('message.delivered', fun ?MODULE:on_message_delivered/4, [Env]),
     emqttd:hook('message.acked', fun ?MODULE:on_message_acked/4, [Env]).
 
-ekaf_init(_Env) ->
+brod_init(_Env) ->
     % broker 代理服务器的地址
-    {ok, BootstrapBroker} = get_bootstrap_broker(),
+    {ok, BootstrapBrokers} = get_bootstrap_brokers(),
     % data points 数据流主题及策略
-    {ok, DpTopic, DpPartitionStrategy, DpPartitionWorkers} = get_points_topic(),
+    {ok, DpTopic, _, _} = get_points_topic(),
     % device status 设备状态流主题及策略
-    {ok, DsTopic, DsPartitionStrategy, DsPartitionWorkers} = get_status_topic(),
+    {ok, DsTopic, _, _} = get_status_topic(),
 
-    % Set broker url and port. 设置Kafka代理地址
-    %
-    % Ideally should be the IP of a load balancer so that any broker can be contacted
-    % 要找到一个 load balancer 的 IP 作为地址传入，可以使用apache作为balancer吗？
-    %
-    % ekaf_bootstrap_broker 只有一个使用场景，即查询metadata，获得kafka partitions集群的的信息。
-    % 之后 ekaf_bootstrap_broker 就不会再用到了，之后都是直接连接具体brokers地址。
-    % application:set_env(ekaf, ekaf_bootstrap_broker, {"127.0.0.1", 9092}),
-    application:set_env(ekaf, ekaf_bootstrap_broker, BootstrapBroker),
+    {ok, _} = application:ensure_all_started(brod),
 
-    % Set topic. 设置主题地址
-    % 注释掉，以实现主题 workers 的懒加载。
-    % application:set_env(ekaf, ekaf_bootstrap_topics, DpTopic),
+    % socket error recovery
+    ClientConfig =
+        [
+           {reconnect_cool_down_seconds, 10},
+           %% avoid api version query in older version brokers. needed with kafka 0.9.x or earlier.
+           % {query_api_version, false},
 
-    % Set partition strategy. 设置分区策略，默认是random.
-    % eg. application:set_env(ekaf, ekaf_partition_strategy, strict_round_robin),
-    application:set_env(ekaf, ekaf_partition_strategy,
-                        [
-                         {DpTopic, DpPartitionStrategy},
-                         {DsTopic, DsPartitionStrategy},
-                         {ekaf_partition_strategy, strict_round_robin}
-                         ]),
+           %% Auto start producer with default producer config
+           %{auto_start_producers, true},
+           %%
+           %{default_producer_config, []},
 
-    % 可以通过此方式改写分区选择
-    % application:set_env(ekaf, ekaf_callback_custom_partition_picker, {ekaf_callbacks, default_custom_partition_picker}),
+           %% disallow
+           {allow_topic_auto_creation, false}
+        ],
 
-    % batch setting 批量消息设置
-    % reach 20, then send batch. 达到20条消息则推送
-    % 1 second(s) of inactivity, then send batch. 1秒后批量推送
-    application:set_env(ekaf, ekaf_max_buffer_size, 20), % 默认值(default) 100
-    application:set_env(ekaf, ekaf_buffer_ttl, 1000), % 默认值(default) 5000
-
-    % the count of partition workers. 分区的worker个数
-    % application:set_env(ekaf, ekaf_per_partition_workers, 5), % 默认值(default) 100
-    % application:set_env(ekaf, ekaf_per_partition_workers_max, 10), % 默认值(default) 100
-    application:set_env(ekaf, ekaf_per_partition_workers,
-                         [
-                           {DpTopic, DpPartitionWorkers},
-                           {DsTopic, DsPartitionWorkers},
-                           {ekaf_per_partition_workers, 2}    % for remaining topics
-                        ]),
-    application:set_env(ekaf, ekaf_per_partition_workers_max,
-                         [
-                           {DpTopic, DpPartitionWorkers},
-                           {DsTopic, DsPartitionWorkers},
-                           {ekaf_per_partition_workers_max, 2}    % for remaining topics
-                        ]),
-
-    % downtime buffer size. 
-    % 当kafka代理不可用时，缓存待发送消息的buffer的大小。默认不会设置，即0
-    application:set_env(ekaf, ekaf_max_downtime_buffer_size, 100),
-
-    % intrument settings
-
-    % enable each worker reference to a UDP socket to statsd.
-    % or statsd would be a bottleneck when there are too many workers.
-    % 使每一个 worker 都关联一个到 statsd 服务的 udp socket，否则，当worker数量多时，statsd会有瓶颈。
-    % application:set_env(ekaf, ?EKAF_PUSH_TO_STATSD_ENABLED,  true),
-    % set intrument callbacks. 监听各类状态
-    application:set_env(ekaf, ?EKAF_CALLBACK_FLUSH_ATOM,  {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_FLUSHED_REPLIED_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_WORKER_DOWN_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_WORKER_UP_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_DOWNTIME_SAVED_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_DOWNTIME_REPLAYED_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_TIME_TO_CONNECT_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_TIME_DOWN_ATOM, {?APP, emq_kafka_callback}),
-    application:set_env(ekaf, ?EKAF_CALLBACK_MAX_DOWNTIME_BUFFER_REACHED_ATOM, {?APP, emq_kafka_callback}),
-
-    %% 启动各个子模块，其中kafkamocker会模拟一个kafka代理，
-    %% ranch是kafkamocker所有依赖的，提供tcp支持的模块
-    %% {ok, _} = application:ensure_all_started(kafkamocker),
-    {ok, _} = application:ensure_all_started(gproc),
-    %% {ok, _} = application:ensure_all_started(ranch),
-    {ok, _} = application:ensure_all_started(ekaf),
-
-    ekaf:metadata(DpTopic),
-    ekaf:metadata(DsTopic),
-
-    io:format("~p: Init ekaf with ~p~n", [?MODULE, BootstrapBroker]).
+    ok = brod:start_client(BootstrapBrokers, brod_client_1, ClientConfig),
+    % Start a Producer on Demand
+    ok = brod:start_producer(brod_client_1, DpTopic, _ProducerConfig = []),
+    ok = brod:start_producer(brod_client_1, DsTopic, _ProducerConfig = []),
+    io:format("~p: Init brod kafka client with ~p~n", [?MODULE, BootstrapBrokers]).
 
 on_client_connected(_ConnAck, Client = #mqtt_client{
                         client_id    = ClientId,
@@ -243,18 +184,23 @@ produce_status(ClientId, Json) ->
 produce(TopicInfo, ClientId, Json) ->
     case TopicInfo of
         {ok, Topic, custom, _}->
-            ekaf:produce_async_batched(Topic, {ClientId, list_to_binary(Json)}),
-            ok;
+            brod_produce(Topic, hash, ClientId, Json);
         {ok, Topic, _, _} ->
-            ekaf:produce_async_batched(Topic, list_to_binary(Json)),
-            ok
+            brod_produce(Topic, random, ClientId, Json)
     end.
 
+brod_produce(Topic, Partitioner, ClientId, Json) ->
+    {ok, CallRef} = brod:produce(brod_client_1, Topic, Partitioner, ClientId, list_to_binary(Json)),
+    receive
+        #brod_produce_reply{call_ref = CallRef, result = brod_produce_req_acked} -> ok
+    after 5000 ->
+        lager:error("~n~p ~p produce message to ~p for ~p timeout.",[erlang:timestamp(), ?MODULE, Topic, ClientId])
+    end,
+    ok.
+
 %% 从配置中获取当前Kafka的初始broker配置
-get_bootstrap_broker() ->
-    {ok, Values} = application:get_env(?APP, bootstrap_broker),
-    BootstrapBroker = proplists:get_value(bootstrap_broker, Values),
-    {ok, BootstrapBroker}.
+get_bootstrap_brokers() ->
+    application:get_env(?APP, bootstrap_brokers).
 
 get_config_prop_list() ->
     application:get_env(?APP, config).
@@ -294,83 +240,3 @@ unload() ->
     emqttd:unhook('message.delivered', fun ?MODULE:on_message_delivered/4),
     emqttd:unhook('message.acked', fun ?MODULE:on_message_acked/4).
 
-emq_kafka_callback(Event, From, StateName, State, Extra) ->
-    case get_instrument_config() of
-        {ok, true} -> emq_kafka_callback_real(Event, From, StateName, State, Extra);
-        _ -> ok
-    end.
-
-emq_kafka_callback_real(Event, _From, _StateName, #ekaf_fsm {
-                          topic = Topic,
-                          broker = _Broker,
-                          partition = PartitionId,
-                          last_known_size = BufferLength,
-                          cor_id = CorId,
-                          leader = Leader } = _State, Extra)->
-    Stat = <<Topic/binary,".",  Event/binary, ".broker", (ekaf_utils:itob(Leader))/binary, ".", (ekaf_utils:itob(PartitionId))/binary>>,
-    case Event of
-        ?EKAF_CALLBACK_FLUSH ->
-            % 消息已发送
-            io:format("~n ~s ~w",[Stat, BufferLength]),
-            %NOTE, if application:set_env(ekaf, ?EKAF_PUSH_TO_STATSD_ENABLED, true),
-            % then you can call ekaf_stats:udp_gauge(_State#ekaf_fsm.statsd_socket, Stat)
-            % eg: ekaf.events.broker1.0 => 100
-
-            %io:format("~n ~p flush broker~w#~p when size was ~p corid ~p via:~p",[Topic, Leader, PartitionId, BufferLength, CorId, _From]);
-            ok;
-        ?EKAF_CALLBACK_FLUSHED_REPLIED ->
-            % 收到消息的回复
-            case Extra of
-                {ok, {{replied, _, _}, #produce_response{ cor_id = ReplyCorId }} }->
-                    Diff = case (CorId - ReplyCorId  ) of Neg when Neg < 0 -> 0; SomeDiff -> SomeDiff end,
-                    FinalStat = <<Stat/binary,".diff">>,
-                    io:format("~n~s ~w",[FinalStat, Diff]);
-                _ ->
-                    ?INFO_MSG("ekaf_fsm callback got ~p some:~p ~nextra:~p",[Event, Extra])
-            end;
-        ?EKAF_CALLBACK_WORKER_UP ->
-            io:format("~n ~s 1",[Stat]),
-            %NOTE, if application:set_env(ekaf, ?EKAF_PUSH_TO_STATSD_ENABLED, true),
-            % then you can call ekaf_stats:udp_incr(_State#ekaf_fsm.statsd_socket, Stat)
-            % eg: ekaf.events.worker_up
-            ok;
-        ?EKAF_CALLBACK_WORKER_DOWN ->
-            io:format("~n ~s 1",[Stat]),
-            ok;
-        ?EKAF_CALLBACK_TIME_TO_CONNECT ->
-            % 每个worker花了多长时间连接服务器，如果与8个分区，每个分区有100个worker，则会在初次连接时有800这样的回调
-            case Extra of
-                {ok, Micros}->
-                    io:format("~n ~s => ~p",[Stat, ekaf_utils:ceiling(Micros/1000)]);
-                _ ->
-                    ok
-            end;
-        _ ->
-            ?INFO_MSG("ekaf_fsm callback got ~p ~p",[Event, Extra])
-    end;
-
-emq_kafka_callback_real(Event, _From, StateName,
-                #ekaf_server{ topic = Topic },
-                Extra)->
-    Stat = <<Topic/binary,".",  Event/binary>>,
-    case Event of
-        ?EKAF_CALLBACK_DOWNTIME_SAVED ->
-            io:format("~n ~s => 1",[Stat]),
-            ok;
-        ?EKAF_CALLBACK_DOWNTIME_REPLAYED ->
-            io:format("~n ~s => 1 during ~p",[Stat, StateName]),
-            ok;
-        ?EKAF_CALLBACK_TIME_DOWN ->
-            case Extra of
-                {ok, Micros}->
-                    io:format("~n ~s => ~p",[Stat, ekaf_utils:ceiling(Micros/1000)]);
-                _ ->
-                    ok
-            end;
-        ?EKAF_CALLBACK_WORKER_DOWN ->
-            FinalStat = <<Topic/binary,".mainbroker_unreachable">>,
-            io:format("~n ~s => 1",[FinalStat]),
-            ok;
-        _ ->
-            ?INFO_MSG("ekaf_server callback got ~p ~p",[Event, Extra])
-    end.

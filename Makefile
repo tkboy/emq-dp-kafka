@@ -3,8 +3,8 @@ PROJECT_DESCRIPTION = EMQ Kafka Bridge for DataPoint and Status
 PROJECT_VERSION = 2.3.10
 
 # 依赖项
-DEPS = ekaf
-dep_ekaf = https://github.com/helpshift/ekaf 8967b8a0cf650c80656d48fcdcd1e1b3c8d8d6a7
+DEPS = brod
+dep_brod = https://github.com/klarna/brod 3.7.2
 
 BUILD_DEPS = emqttd cuttlefish
 dep_emqttd = git https://github.com/emqtt/emqttd master
