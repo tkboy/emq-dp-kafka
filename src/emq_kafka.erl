@@ -79,13 +79,13 @@ brod_init(_Env) ->
     % Start a Producer on Demand
     ok = brod:start_producer(brod_client_1, DpTopic, _ProducerConfig = []),
     ok = brod:start_producer(brod_client_1, DsTopic, _ProducerConfig = []),
-    io:format("~p ~p: Init brod kafka client with ~p~n", [erlang:timestamp(), ?MODULE, BootstrapBrokers]).
+    lager:info("Init brod kafka client with ~p", [BootstrapBrokers]).
 
 on_client_connected(_ConnAck, Client = #mqtt_client{
                         client_id    = ClientId,
                         username     = Username,
                         connected_at = ConnectedAt}, _Env) ->
-    io:format("~n~p: client ~s connected~n", [?MODULE, ClientId]),
+    lager:info("Client ~s connected.", [ClientId]),
     Json = mochijson2:encode([
         {type, <<"connected">>},
         {client_id, ClientId},
@@ -100,7 +100,7 @@ on_client_disconnected(Reason, _Client = #mqtt_client{
                         client_id    = ClientId,
                         username     = Username,
                         connected_at = ConnectedAt}, _Env) ->
-    io:format("~n~p ~p: client ~s disconnected, reason: ~w~n", [erlang:timestamp(), ?MODULE, ClientId, Reason]),
+    lager:info("Client ~s disconnected, reason: ~w", [ClientId, Reason]),
     Json = mochijson2:encode([
         {type, <<"disconnected">>},
         {client_id, ClientId},
@@ -113,26 +113,26 @@ on_client_disconnected(Reason, _Client = #mqtt_client{
     ok.
 
 on_client_subscribe(ClientId, Username, TopicTable, _Env) ->
-    io:format("~p ~p: client(~s/~s) will subscribe: ~p~n", [erlang:timestamp(), ?MODULE, Username, ClientId, TopicTable]),
+    lager:info("Client(~s/~s) will subscribe: ~p", [Username, ClientId, TopicTable]),
     {ok, TopicTable}.
 
 on_client_unsubscribe(ClientId, Username, TopicTable, _Env) ->
-    io:format("~p ~p: client(~s/~s) unsubscribe ~p~n", [erlang:timestamp(), ?MODULE, ClientId, Username, TopicTable]),
+    lager:info("Client(~s/~s) unsubscribe ~p", [ClientId, Username, TopicTable]),
     {ok, TopicTable}.
 
 on_session_created(ClientId, Username, _Env) ->
-    io:format("~p ~p: session(~s/~s) created.~n", [erlang:timestamp(), ?MODULE, ClientId, Username]).
+    lager:info("Session(~s/~s) created.", [ClientId, Username]).
 
 on_session_subscribed(ClientId, Username, {Topic, Opts}, _Env) ->
-    io:format("~p ~p: session(~s/~s) subscribed: ~p~n", [erlang:timestamp(), ?MODULE, Username, ClientId, {Topic, Opts}]),
+    lager:info("Session(~s/~s) subscribed: ~p~n", [Username, ClientId, {Topic, Opts}]),
     {ok, {Topic, Opts}}.
 
 on_session_unsubscribed(ClientId, Username, {Topic, Opts}, _Env) ->
-    io:format("~p ~p: session(~s/~s) unsubscribed: ~p~n", [erlang:timestamp(), ?MODULE, Username, ClientId, {Topic, Opts}]),
+    lager:info("Session(~s/~s) unsubscribed: ~p~n", [Username, ClientId, {Topic, Opts}]),
     ok.
 
 on_session_terminated(ClientId, Username, Reason, _Env) ->
-    io:format("~p ~p: session(~s/~s) terminated: ~p.~n", [erlang:timestamp(), ?MODULE, ClientId, Username, Reason]).
+    lager:info("Session(~s/~s) terminated: ~p.~n", [ClientId, Username, Reason]).
 
 %% transform message and return
 on_message_publish(Message = #mqtt_message{topic = <<"$SYS/", _/binary>>}, _Env) ->
@@ -147,7 +147,7 @@ on_message_publish(Message = #mqtt_message{
                         topic     = Topic,
                         payload   = Payload,
                         timestamp = Timestamp}, _Env) ->
-    io:format("~p ~p: publish ~s~n", [erlang:timestamp(), ?MODULE, emqttd_message:format(Message)]),
+    lager:info("Publish ~s~n", [emqttd_message:format(Message)]),
     Json = mochijson2:encode([
         {type, <<"published">>},
         {client_id, ClientId},
@@ -164,11 +164,11 @@ on_message_publish(Message = #mqtt_message{
     {ok, Message}.
 
 on_message_delivered(ClientId, Username, Message, _Env) ->
-    io:format("~p ~p: delivered to client(~s/~s): ~s~n", [erlang:timestamp(), ?MODULE, Username, ClientId, emqttd_message:format(Message)]),
+    lager:info("Delivered to client(~s/~s): ~s", [Username, ClientId, emqttd_message:format(Message)]),
     {ok, Message}.
 
 on_message_acked(ClientId, Username, Message, _Env) ->
-    io:format("~p ~p: client(~s/~s) acked: ~s~n", [erlang:timestamp(), ?MODULE, Username, ClientId, emqttd_message:format(Message)]),
+    lager:info("Client(~s/~s) acked: ~s", [Username, ClientId, emqttd_message:format(Message)]),
     {ok, Message}.
 
 produce_points(ClientId, Json) ->
@@ -194,7 +194,7 @@ brod_produce(Topic, Partitioner, ClientId, Json) ->
     receive
         #brod_produce_reply{call_ref = CallRef, result = brod_produce_req_acked} -> ok
     after 5000 ->
-        io:format("~p ~p: produce message to ~p for ~p timeout.~n",[erlang:timestamp(), ?MODULE, Topic, ClientId])
+        lager:error("Produce message to ~p for ~p timeout.",[Topic, ClientId])
     end,
     ok.
 
@@ -240,6 +240,6 @@ unload() ->
     emqttd:unhook('message.delivered', fun ?MODULE:on_message_delivered/4),
     emqttd:unhook('message.acked', fun ?MODULE:on_message_acked/4),
     brod:stop(),
-    io:format("~p ~p: stop brod kafka client.~n", [erlang:timestamp(), ?MODULE]).
+    lager:info("Stop brod kafka client.").
 
 
