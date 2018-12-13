@@ -67,9 +67,9 @@ brod_init(_Env) ->
            % {query_api_version, false},
 
            %% Auto start producer with default producer config
-           %{auto_start_producers, true},
+           {auto_start_producers, true},
            %%
-           %{default_producer_config, []},
+           {default_producer_config, []},
 
            %% disallow
            {allow_topic_auto_creation, false}
@@ -77,8 +77,8 @@ brod_init(_Env) ->
 
     ok = brod:start_client(BootstrapBrokers, brod_client_1, ClientConfig),
     % Start a Producer on Demand
-    ok = brod:start_producer(brod_client_1, DpTopic, _ProducerConfig = []),
-    ok = brod:start_producer(brod_client_1, DsTopic, _ProducerConfig = []),
+    %ok = brod:start_producer(brod_client_1, DpTopic, _ProducerConfig = []),
+    %ok = brod:start_producer(brod_client_1, DsTopic, _ProducerConfig = []),
     lager:info("Init brod kafka client with ~p", [BootstrapBrokers]).
 
 on_client_connected(_ConnAck, Client = #mqtt_client{
@@ -228,6 +228,7 @@ get_topic(Values) ->
 
 %% Called when the plugin application stop
 unload() ->
+    lager:info("Unhooking the emq callbacks."),
     emqttd:unhook('client.connected', fun ?MODULE:on_client_connected/3),
     emqttd:unhook('client.disconnected', fun ?MODULE:on_client_disconnected/3),
     emqttd:unhook('client.subscribe', fun ?MODULE:on_client_subscribe/4),
@@ -239,7 +240,9 @@ unload() ->
     emqttd:unhook('message.publish', fun ?MODULE:on_message_publish/2),
     emqttd:unhook('message.delivered', fun ?MODULE:on_message_delivered/4),
     emqttd:unhook('message.acked', fun ?MODULE:on_message_acked/4),
-    brod:stop(),
-    lager:info("Stop brod kafka client.").
+    lager:info("Stopping brod kafka client."),
+    % It is ok to leave brod application there.
+    brod:stop_client(brod_client_1),
+    lager:info("Finished all unload works.").
 
 
